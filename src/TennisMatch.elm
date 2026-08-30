@@ -2,12 +2,12 @@ module TennisMatch exposing
     ( CompletedMatch
     , CompletedSet(..)
     , Game(..)
+    , GameResult(..)
     , Match(..)
     , MatchInProgress
     , Msg(..)
     , Player(..)
     , PlayerNames
-    , PointResult(..)
     , PointScore(..)
     , RegularGameState
     , SetInProgress
@@ -15,7 +15,8 @@ module TennisMatch exposing
     , TiebreakScore
     , TiebreakState
     , initialMatch
-    , pointWon
+    , gamePointWon
+    , tiebreakServer
     )
 
 {-| Domain sketch for a best-of-three match.
@@ -64,125 +65,131 @@ type PointScore
 
 
 type PointResult
-    = GameContinues PointScore
-    | GameWonBy Player
+    = PointScoreChanged PointScore
+    | RegularGameWonBy Player
 
 
-pointWon : Player -> PointScore -> PointResult
-pointWon player score =
+regularGamePointWon : Player -> PointScore -> PointResult
+regularGamePointWon player score =
     case ( player, score ) of
         ( PlayerOne, LoveLove ) ->
-            GameContinues FifteenLove
+            PointScoreChanged FifteenLove
 
         ( PlayerTwo, LoveLove ) ->
-            GameContinues LoveFifteen
+            PointScoreChanged LoveFifteen
 
         ( PlayerOne, FifteenLove ) ->
-            GameContinues ThirtyLove
+            PointScoreChanged ThirtyLove
 
         ( PlayerTwo, FifteenLove ) ->
-            GameContinues FifteenAll
+            PointScoreChanged FifteenAll
 
         ( PlayerOne, LoveFifteen ) ->
-            GameContinues FifteenAll
+            PointScoreChanged FifteenAll
 
         ( PlayerTwo, LoveFifteen ) ->
-            GameContinues LoveThirty
+            PointScoreChanged LoveThirty
 
         ( PlayerOne, FifteenAll ) ->
-            GameContinues ThirtyFifteen
+            PointScoreChanged ThirtyFifteen
 
         ( PlayerTwo, FifteenAll ) ->
-            GameContinues FifteenThirty
+            PointScoreChanged FifteenThirty
 
         ( PlayerOne, ThirtyLove ) ->
-            GameContinues FortyLove
+            PointScoreChanged FortyLove
 
         ( PlayerTwo, ThirtyLove ) ->
-            GameContinues ThirtyFifteen
+            PointScoreChanged ThirtyFifteen
 
         ( PlayerOne, LoveThirty ) ->
-            GameContinues FifteenThirty
+            PointScoreChanged FifteenThirty
 
         ( PlayerTwo, LoveThirty ) ->
-            GameContinues LoveForty
+            PointScoreChanged LoveForty
 
         ( PlayerOne, ThirtyFifteen ) ->
-            GameContinues FortyFifteen
+            PointScoreChanged FortyFifteen
 
         ( PlayerTwo, ThirtyFifteen ) ->
-            GameContinues ThirtyAll
+            PointScoreChanged ThirtyAll
 
         ( PlayerOne, FifteenThirty ) ->
-            GameContinues ThirtyAll
+            PointScoreChanged ThirtyAll
 
         ( PlayerTwo, FifteenThirty ) ->
-            GameContinues FifteenForty
+            PointScoreChanged FifteenForty
 
         ( PlayerOne, ThirtyAll ) ->
-            GameContinues FortyThirty
+            PointScoreChanged FortyThirty
 
         ( PlayerTwo, ThirtyAll ) ->
-            GameContinues ThirtyForty
+            PointScoreChanged ThirtyForty
 
         ( PlayerOne, FortyLove ) ->
-            GameWonBy PlayerOne
+            RegularGameWonBy PlayerOne
 
         ( PlayerTwo, FortyLove ) ->
-            GameContinues FortyFifteen
+            PointScoreChanged FortyFifteen
 
         ( PlayerOne, LoveForty ) ->
-            GameContinues FifteenForty
+            PointScoreChanged FifteenForty
 
         ( PlayerTwo, LoveForty ) ->
-            GameWonBy PlayerTwo
+            RegularGameWonBy PlayerTwo
 
         ( PlayerOne, FortyFifteen ) ->
-            GameWonBy PlayerOne
+            RegularGameWonBy PlayerOne
 
         ( PlayerTwo, FortyFifteen ) ->
-            GameContinues FortyThirty
+            PointScoreChanged FortyThirty
 
         ( PlayerOne, FifteenForty ) ->
-            GameContinues ThirtyForty
+            PointScoreChanged ThirtyForty
 
         ( PlayerTwo, FifteenForty ) ->
-            GameWonBy PlayerTwo
+            RegularGameWonBy PlayerTwo
 
         ( PlayerOne, FortyThirty ) ->
-            GameWonBy PlayerOne
+            RegularGameWonBy PlayerOne
 
         ( PlayerTwo, FortyThirty ) ->
-            GameContinues Deuce
+            PointScoreChanged Deuce
 
         ( PlayerOne, ThirtyForty ) ->
-            GameContinues Deuce
+            PointScoreChanged Deuce
 
         ( PlayerTwo, ThirtyForty ) ->
-            GameWonBy PlayerTwo
+            RegularGameWonBy PlayerTwo
 
         ( PlayerOne, Deuce ) ->
-            GameContinues (Advantage PlayerOne)
+            PointScoreChanged (Advantage PlayerOne)
 
         ( PlayerTwo, Deuce ) ->
-            GameContinues (Advantage PlayerTwo)
+            PointScoreChanged (Advantage PlayerTwo)
 
         ( PlayerOne, Advantage PlayerOne ) ->
-            GameWonBy PlayerOne
+            RegularGameWonBy PlayerOne
 
         ( PlayerTwo, Advantage PlayerOne ) ->
-            GameContinues Deuce
+            PointScoreChanged Deuce
 
         ( PlayerOne, Advantage PlayerTwo ) ->
-            GameContinues Deuce
+            PointScoreChanged Deuce
 
         ( PlayerTwo, Advantage PlayerTwo ) ->
-            GameWonBy PlayerTwo
+            RegularGameWonBy PlayerTwo
 
 
 type Game
     = RegularGame RegularGameState
     | Tiebreak TiebreakState
+
+
+type GameResult
+    = GameContinues Game
+    | RegularGameWon Player
+    | TiebreakWon Player TiebreakScore
 
 
 type alias RegularGameState =
@@ -195,6 +202,79 @@ type alias TiebreakState =
     { score : TiebreakScore
     , firstServer : Player
     }
+
+
+gamePointWon : Player -> Game -> GameResult
+gamePointWon player game =
+    case game of
+        RegularGame state ->
+            case regularGamePointWon player state.score of
+                PointScoreChanged score ->
+                    GameContinues (RegularGame { state | score = score })
+
+                RegularGameWonBy winner ->
+                    RegularGameWon winner
+
+        Tiebreak state ->
+            let
+                score =
+                    incrementTiebreakScore player state.score
+            in
+            if tiebreakIsWonBy player score then
+                TiebreakWon player score
+
+            else
+                GameContinues (Tiebreak { state | score = score })
+
+
+incrementTiebreakScore : Player -> TiebreakScore -> TiebreakScore
+incrementTiebreakScore player score =
+    case player of
+        PlayerOne ->
+            { score | playerOne = score.playerOne + 1 }
+
+        PlayerTwo ->
+            { score | playerTwo = score.playerTwo + 1 }
+
+
+tiebreakIsWonBy : Player -> TiebreakScore -> Bool
+tiebreakIsWonBy player score =
+    let
+        ( winnerPoints, loserPoints ) =
+            case player of
+                PlayerOne ->
+                    ( score.playerOne, score.playerTwo )
+
+                PlayerTwo ->
+                    ( score.playerTwo, score.playerOne )
+    in
+    winnerPoints >= 7 && winnerPoints - loserPoints >= 2
+
+
+tiebreakServer : TiebreakState -> Player
+tiebreakServer state =
+    let
+        pointsPlayed =
+            state.score.playerOne + state.score.playerTwo
+
+        serviceTurn =
+            (pointsPlayed + 1) // 2
+    in
+    if pointsPlayed == 0 || modBy 2 serviceTurn == 0 then
+        state.firstServer
+
+    else
+        otherPlayer state.firstServer
+
+
+otherPlayer : Player -> Player
+otherPlayer player =
+    case player of
+        PlayerOne ->
+            PlayerTwo
+
+        PlayerTwo ->
+            PlayerOne
 
 
 

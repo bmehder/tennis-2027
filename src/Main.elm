@@ -1,9 +1,10 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, button, div, h1, p, text)
+import Html exposing (Html, button, div, h1, span, sup, text)
+import Html.Attributes exposing (class, classList)
 import Html.Events exposing (onClick)
-import TennisMatch exposing (CompletedMatch, Game(..), Match(..), MatchInProgress, Msg(..), Player(..), PlayerNames, PointResult(..), PointScore(..), initialMatch, pointWon)
+import TennisMatch exposing (CompletedMatch, CompletedSet(..), Game(..), GameResult(..), Match(..), MatchInProgress, Msg(..), Player(..), PlayerNames, PointScore(..), SetScore, TiebreakScore, initialMatch, gamePointWon, tiebreakServer)
 
 
 type alias Model =
@@ -26,7 +27,7 @@ update msg model =
         PointWonBy player ->
             case model of
                 InProgress match ->
-                    InProgress (updateInProgress player match)
+                    updateInProgress player match
 
                 Completed _ ->
                     model
@@ -35,60 +36,167 @@ update msg model =
             InProgress initialMatch
 
 
-updateInProgress : Player -> MatchInProgress -> MatchInProgress
+updateInProgress : Player -> MatchInProgress -> Match
 updateInProgress player match =
-    case match.currentSet.game of
-        RegularGame game ->
-            case pointWon player game.score of
-                GameContinues score ->
-                    let
-                        currentSet =
-                            match.currentSet
+    case gamePointWon player match.currentSet.game of
+        GameContinues game ->
+            InProgress (replaceCurrentGame game match)
 
-                        updatedSet =
-                            { currentSet
-                                | game = RegularGame { game | score = score }
-                            }
-                    in
-                    { match | currentSet = updatedSet }
+        RegularGameWon winner ->
+            case match.currentSet.game of
+                RegularGame game ->
+                    finishRegularGame winner game.server match
 
-                GameWonBy winner ->
-                    finishGame winner game.server match
+                Tiebreak _ ->
+                    InProgress match
 
-        Tiebreak _ ->
-            match
+        TiebreakWon winner score ->
+            case match.currentSet.game of
+                Tiebreak tiebreak ->
+                    finishTiebreak winner score tiebreak.firstServer match
+
+                RegularGame _ ->
+                    InProgress match
 
 
-finishGame : Player -> Player -> MatchInProgress -> MatchInProgress
-finishGame winner server match =
+replaceCurrentGame : Game -> MatchInProgress -> MatchInProgress
+replaceCurrentGame game match =
+    let
+        currentSet =
+            match.currentSet
+    in
+    { match | currentSet = { currentSet | game = game } }
+
+
+finishRegularGame : Player -> Player -> MatchInProgress -> Match
+finishRegularGame winner server match =
     let
         currentSet =
             match.currentSet
 
-        games =
-            currentSet.games
-
         updatedGames =
-            case winner of
+            incrementSetScore winner currentSet.games
+
+        nextServer =
+            otherPlayer server
+    in
+    if setIsWonBy winner updatedGames then
+        completeSet winner (RegularSet updatedGames) nextServer match
+
+    else if updatedGames.playerOne == 6 && updatedGames.playerTwo == 6 then
+        InProgress
+            { match
+                | currentSet =
+                    { games = updatedGames
+                    , game =
+                        Tiebreak
+                            { score = { playerOne = 0, playerTwo = 0 }
+                            , firstServer = nextServer
+                            }
+                    }
+            }
+
+    else
+        InProgress
+            { match
+                | currentSet =
+                    { games = updatedGames
+                    , game =
+                        RegularGame
+                            { score = LoveLove
+                            , server = nextServer
+                            }
+                    }
+            }
+
+
+finishTiebreak : Player -> TiebreakScore -> Player -> MatchInProgress -> Match
+finishTiebreak winner tiebreakScore firstServer match =
+    let
+        finalSetScore =
+            incrementSetScore winner match.currentSet.games
+    in
+    completeSet
+        winner
+        (TiebreakSet finalSetScore tiebreakScore)
+        (otherPlayer firstServer)
+        match
+
+
+incrementSetScore : Player -> SetScore -> SetScore
+incrementSetScore player score =
+    case player of
+        PlayerOne ->
+            { score | playerOne = score.playerOne + 1 }
+
+        PlayerTwo ->
+            { score | playerTwo = score.playerTwo + 1 }
+
+
+setIsWonBy : Player -> SetScore -> Bool
+setIsWonBy player score =
+    let
+        ( winnerGames, loserGames ) =
+            case player of
                 PlayerOne ->
-                    { games | playerOne = games.playerOne + 1 }
+                    ( score.playerOne, score.playerTwo )
 
                 PlayerTwo ->
-                    { games | playerTwo = games.playerTwo + 1 }
-
-        nextGame =
-            RegularGame
-                { score = LoveLove
-                , server = otherPlayer server
-                }
-
-        updatedSet =
-            { currentSet
-                | games = updatedGames
-                , game = nextGame
-            }
+                    ( score.playerTwo, score.playerOne )
     in
-    { match | currentSet = updatedSet }
+    winnerGames >= 6 && winnerGames - loserGames >= 2
+
+
+completeSet : Player -> CompletedSet -> Player -> MatchInProgress -> Match
+completeSet winner completedSet nextServer match =
+    let
+        completedSets =
+            match.completedSets ++ [ completedSet ]
+
+        setsWon =
+            List.length
+                (List.filter
+                    (\set -> completedSetWinner set == winner)
+                    completedSets
+                )
+    in
+    if setsWon == 2 then
+        Completed
+            { players = match.players
+            , sets = completedSets
+            }
+
+    else
+        InProgress
+            { match
+                | completedSets = completedSets
+                , currentSet =
+                    { games = { playerOne = 0, playerTwo = 0 }
+                    , game =
+                        RegularGame
+                            { score = LoveLove
+                            , server = nextServer
+                            }
+                    }
+            }
+
+
+completedSetWinner : CompletedSet -> Player
+completedSetWinner completedSet =
+    let
+        score =
+            case completedSet of
+                RegularSet setScore ->
+                    setScore
+
+                TiebreakSet setScore _ ->
+                    setScore
+    in
+    if score.playerOne > score.playerTwo then
+        PlayerOne
+
+    else
+        PlayerTwo
 
 
 otherPlayer : Player -> Player
@@ -117,52 +225,252 @@ view model =
 
 viewInProgress : MatchInProgress -> Html Msg
 viewInProgress match =
-    div []
-        [ h1 [] [ text "Tennis Match" ]
-        , p []
-            [ text
-                (match.players.playerOne
-                    ++ "  "
-                    ++ String.fromInt match.currentSet.games.playerOne
-                )
+    div [ class "app-shell" ]
+        [ h1 [] [ text "Elm Tennis 2027" ]
+        , div [ class "scoreboard" ]
+            [ scoreboardHeader
+            , playerRow
+                match.players
+                match.completedSets
+                (Just match.currentSet.games)
+                (Just match.currentSet.game)
+                (Just (currentServer match.currentSet.game))
+                PlayerOne
+            , playerRow
+                match.players
+                match.completedSets
+                (Just match.currentSet.games)
+                (Just match.currentSet.game)
+                (Just (currentServer match.currentSet.game))
+                PlayerTwo
             ]
-        , p []
-            [ text
-                (match.players.playerTwo
-                    ++ "  "
-                    ++ String.fromInt match.currentSet.games.playerTwo
-                )
+        , div [ class "point-controls" ]
+            [ button
+                [ class "point-button"
+                , onClick (PointWonBy PlayerOne)
+                ]
+                [ span [ class "button-label" ] [ text "Point for" ]
+                , text match.players.playerOne
+                ]
+            , button
+                [ class "point-button"
+                , onClick (PointWonBy PlayerTwo)
+                ]
+                [ span [ class "button-label" ] [ text "Point for" ]
+                , text match.players.playerTwo
+                ]
             ]
-        , p [] [ text (gameScoreLabel match.currentSet.game) ]
-        , p [] [ text (serverLabel match.players match.currentSet.game) ]
-        , button
-            [ onClick (PointWonBy PlayerOne)
-            ]
-            [ text ("Point for " ++ match.players.playerOne) ]
-        , button
-            [ onClick (PointWonBy PlayerTwo)
-            ]
-            [ text ("Point for " ++ match.players.playerTwo) ]
         ]
 
 
 viewCompleted : CompletedMatch -> Html Msg
 viewCompleted match =
-    div []
-        [ h1 [] [ text "Match complete" ]
-        , p [] [ text match.players.playerOne ]
-        , p [] [ text match.players.playerTwo ]
+    div [ class "app-shell" ]
+        [ h1 [] [ text "Elm Tennis 2027" ]
+        , div [ class "scoreboard" ]
+            [ scoreboardHeader
+            , playerRow match.players match.sets Nothing Nothing Nothing PlayerOne
+            , playerRow match.players match.sets Nothing Nothing Nothing PlayerTwo
+            ]
+        , button
+            [ class "restart-button"
+            , onClick RestartMatch
+            ]
+            [ text "Start a new match" ]
         ]
 
 
-serverLabel : PlayerNames -> Game -> String
-serverLabel players game =
+scoreboardHeader : Html msg
+scoreboardHeader =
+    div [ class "scoreboard-row scoreboard-header" ]
+        [ span [] []
+        , span [ class "player-heading" ] [ text "Player" ]
+        , span [] [ text "1" ]
+        , span [] [ text "2" ]
+        , span [] [ text "3" ]
+        , span [] [ text "Pts" ]
+        ]
+
+
+playerRow : PlayerNames -> List CompletedSet -> Maybe SetScore -> Maybe Game -> Maybe Player -> Player -> Html msg
+playerRow players completedSets currentSet currentGame currentServer_ player =
+    let
+        completedCells =
+            List.map (completedSetCell player) completedSets
+
+        currentCell =
+            case currentSet of
+                Just score ->
+                    [ scoreCell False (scoreFor player score) [] ]
+
+                Nothing ->
+                    []
+
+        emptyCells =
+            List.repeat (3 - List.length completedCells - List.length currentCell)
+                (span [ class "set-score empty-score" ] [ text "–" ])
+    in
+    div [ class "scoreboard-row player-row" ]
+        ([ span
+            [ classList
+                [ ( "serve-dot", True )
+                , ( "is-serving", currentServer_ == Just player )
+                ]
+            ]
+            []
+         , span [ class "player-name" ] [ text (playerName players player) ]
+         ]
+            ++ completedCells
+            ++ currentCell
+            ++ emptyCells
+            ++ [ gameScoreCell player currentGame ]
+        )
+
+
+completedSetCell : Player -> CompletedSet -> Html msg
+completedSetCell player completedSet =
+    case completedSet of
+        RegularSet score ->
+            scoreCell
+                (scoreFor player score > scoreFor (otherPlayer player) score)
+                (scoreFor player score)
+                []
+
+        TiebreakSet score tiebreakScore ->
+            let
+                playerLostSet =
+                    scoreFor player score < scoreFor (otherPlayer player) score
+
+                tiebreakDetail =
+                    if playerLostSet then
+                        [ sup [ class "tiebreak-score" ]
+                            [ text (String.fromInt (scoreFor player tiebreakScore)) ]
+                        ]
+
+                    else
+                        []
+            in
+            scoreCell (not playerLostSet) (scoreFor player score) tiebreakDetail
+
+
+scoreCell : Bool -> Int -> List (Html msg) -> Html msg
+scoreCell isSetWinner score detail =
+    span
+        [ classList
+            [ ( "set-score", True )
+            , ( "set-winner", isSetWinner )
+            ]
+        ]
+        (text (String.fromInt score) :: detail)
+
+
+scoreFor : Player -> { score | playerOne : Int, playerTwo : Int } -> Int
+scoreFor player score =
+    case player of
+        PlayerOne ->
+            score.playerOne
+
+        PlayerTwo ->
+            score.playerTwo
+
+
+gameScoreCell : Player -> Maybe Game -> Html msg
+gameScoreCell player game =
+    let
+        score =
+            case game of
+                Just (RegularGame state) ->
+                    regularGameScoreFor player state.score
+
+                Just (Tiebreak state) ->
+                    String.fromInt (scoreFor player state.score)
+
+                Nothing ->
+                    "–"
+    in
+    span [ class "game-score" ] [ text score ]
+
+
+regularGameScoreFor : Player -> PointScore -> String
+regularGameScoreFor player score =
+    let
+        ( playerOneScore, playerTwoScore ) =
+            regularGameScores score
+    in
+    case player of
+        PlayerOne ->
+            playerOneScore
+
+        PlayerTwo ->
+            playerTwoScore
+
+
+regularGameScores : PointScore -> ( String, String )
+regularGameScores score =
+    case score of
+        LoveLove ->
+            ( "0", "0" )
+
+        FifteenLove ->
+            ( "15", "0" )
+
+        LoveFifteen ->
+            ( "0", "15" )
+
+        FifteenAll ->
+            ( "15", "15" )
+
+        ThirtyLove ->
+            ( "30", "0" )
+
+        LoveThirty ->
+            ( "0", "30" )
+
+        ThirtyFifteen ->
+            ( "30", "15" )
+
+        FifteenThirty ->
+            ( "15", "30" )
+
+        ThirtyAll ->
+            ( "30", "30" )
+
+        FortyLove ->
+            ( "40", "0" )
+
+        LoveForty ->
+            ( "0", "40" )
+
+        FortyFifteen ->
+            ( "40", "15" )
+
+        FifteenForty ->
+            ( "15", "40" )
+
+        FortyThirty ->
+            ( "40", "30" )
+
+        ThirtyForty ->
+            ( "30", "40" )
+
+        Deuce ->
+            ( "40", "40" )
+
+        Advantage PlayerOne ->
+            ( "Ad", "40" )
+
+        Advantage PlayerTwo ->
+            ( "40", "Ad" )
+
+
+currentServer : Game -> Player
+currentServer game =
     case game of
         RegularGame state ->
-            playerName players state.server ++ " is serving"
+            state.server
 
-        Tiebreak _ ->
-            "Tiebreak"
+        Tiebreak state ->
+            tiebreakServer state
 
 
 playerName : PlayerNames -> Player -> String
@@ -173,73 +481,3 @@ playerName players player =
 
         PlayerTwo ->
             players.playerTwo
-
-
-gameScoreLabel : Game -> String
-gameScoreLabel game =
-    case game of
-        RegularGame state ->
-            pointScoreLabel state.score
-
-        Tiebreak state ->
-            String.fromInt state.score.playerOne
-                ++ "–"
-                ++ String.fromInt state.score.playerTwo
-
-
-pointScoreLabel : PointScore -> String
-pointScoreLabel score =
-    case score of
-        LoveLove ->
-            "Love–Love"
-
-        FifteenLove ->
-            "15–Love"
-
-        LoveFifteen ->
-            "Love–15"
-
-        FifteenAll ->
-            "15–15"
-
-        ThirtyLove ->
-            "30–Love"
-
-        LoveThirty ->
-            "Love–30"
-
-        ThirtyFifteen ->
-            "30–15"
-
-        FifteenThirty ->
-            "15–30"
-
-        ThirtyAll ->
-            "30–30"
-
-        FortyLove ->
-            "40–Love"
-
-        LoveForty ->
-            "Love–40"
-
-        FortyFifteen ->
-            "40–15"
-
-        FifteenForty ->
-            "15–40"
-
-        FortyThirty ->
-            "40–30"
-
-        ThirtyForty ->
-            "30–40"
-
-        Deuce ->
-            "Deuce"
-
-        Advantage PlayerOne ->
-            "Advantage Player One"
-
-        Advantage PlayerTwo ->
-            "Advantage Player Two"
