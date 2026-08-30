@@ -6,13 +6,16 @@ module TennisMatch exposing
     , MatchInProgress
     , Msg(..)
     , Player(..)
-    , Players
+    , PlayerNames
+    , PointResult(..)
     , PointScore(..)
     , RegularGameState
     , SetInProgress
     , SetScore
     , TiebreakScore
     , TiebreakState
+    , initialMatch
+    , pointWon
     )
 
 {-| Domain sketch for a best-of-three match.
@@ -30,7 +33,7 @@ type Player
     | PlayerTwo
 
 
-type alias Players =
+type alias PlayerNames =
     { playerOne : String
     , playerTwo : String
     }
@@ -58,6 +61,123 @@ type PointScore
     | ThirtyForty
     | Deuce
     | Advantage Player
+
+
+type PointResult
+    = GameContinues PointScore
+    | GameWonBy Player
+
+
+pointWon : Player -> PointScore -> PointResult
+pointWon player score =
+    case ( player, score ) of
+        ( PlayerOne, LoveLove ) ->
+            GameContinues FifteenLove
+
+        ( PlayerTwo, LoveLove ) ->
+            GameContinues LoveFifteen
+
+        ( PlayerOne, FifteenLove ) ->
+            GameContinues ThirtyLove
+
+        ( PlayerTwo, FifteenLove ) ->
+            GameContinues FifteenAll
+
+        ( PlayerOne, LoveFifteen ) ->
+            GameContinues FifteenAll
+
+        ( PlayerTwo, LoveFifteen ) ->
+            GameContinues LoveThirty
+
+        ( PlayerOne, FifteenAll ) ->
+            GameContinues ThirtyFifteen
+
+        ( PlayerTwo, FifteenAll ) ->
+            GameContinues FifteenThirty
+
+        ( PlayerOne, ThirtyLove ) ->
+            GameContinues FortyLove
+
+        ( PlayerTwo, ThirtyLove ) ->
+            GameContinues ThirtyFifteen
+
+        ( PlayerOne, LoveThirty ) ->
+            GameContinues FifteenThirty
+
+        ( PlayerTwo, LoveThirty ) ->
+            GameContinues LoveForty
+
+        ( PlayerOne, ThirtyFifteen ) ->
+            GameContinues FortyFifteen
+
+        ( PlayerTwo, ThirtyFifteen ) ->
+            GameContinues ThirtyAll
+
+        ( PlayerOne, FifteenThirty ) ->
+            GameContinues ThirtyAll
+
+        ( PlayerTwo, FifteenThirty ) ->
+            GameContinues FifteenForty
+
+        ( PlayerOne, ThirtyAll ) ->
+            GameContinues FortyThirty
+
+        ( PlayerTwo, ThirtyAll ) ->
+            GameContinues ThirtyForty
+
+        ( PlayerOne, FortyLove ) ->
+            GameWonBy PlayerOne
+
+        ( PlayerTwo, FortyLove ) ->
+            GameContinues FortyFifteen
+
+        ( PlayerOne, LoveForty ) ->
+            GameContinues FifteenForty
+
+        ( PlayerTwo, LoveForty ) ->
+            GameWonBy PlayerTwo
+
+        ( PlayerOne, FortyFifteen ) ->
+            GameWonBy PlayerOne
+
+        ( PlayerTwo, FortyFifteen ) ->
+            GameContinues FortyThirty
+
+        ( PlayerOne, FifteenForty ) ->
+            GameContinues ThirtyForty
+
+        ( PlayerTwo, FifteenForty ) ->
+            GameWonBy PlayerTwo
+
+        ( PlayerOne, FortyThirty ) ->
+            GameWonBy PlayerOne
+
+        ( PlayerTwo, FortyThirty ) ->
+            GameContinues Deuce
+
+        ( PlayerOne, ThirtyForty ) ->
+            GameContinues Deuce
+
+        ( PlayerTwo, ThirtyForty ) ->
+            GameWonBy PlayerTwo
+
+        ( PlayerOne, Deuce ) ->
+            GameContinues (Advantage PlayerOne)
+
+        ( PlayerTwo, Deuce ) ->
+            GameContinues (Advantage PlayerTwo)
+
+        ( PlayerOne, Advantage PlayerOne ) ->
+            GameWonBy PlayerOne
+
+        ( PlayerTwo, Advantage PlayerOne ) ->
+            GameContinues Deuce
+
+        ( PlayerOne, Advantage PlayerTwo ) ->
+            GameContinues Deuce
+
+        ( PlayerTwo, Advantage PlayerTwo ) ->
+            GameWonBy PlayerTwo
 
 
 type Game
@@ -114,15 +234,36 @@ type Match
 
 
 type alias MatchInProgress =
-    { players : Players
+    { players : PlayerNames
     , completedSets : List CompletedSet
     , currentSet : SetInProgress
     }
 
 
 type alias CompletedMatch =
-    { players : Players
+    { players : PlayerNames
     , sets : List CompletedSet
+    }
+
+
+initialMatch : MatchInProgress
+initialMatch =
+    { players =
+        { playerOne = "Player One"
+        , playerTwo = "Player Two"
+        }
+    , completedSets = []
+    , currentSet =
+        { games =
+            { playerOne = 0
+            , playerTwo = 0
+            }
+        , game =
+            RegularGame
+                { score = LoveLove
+                , server = PlayerOne
+                }
+        }
     }
 
 
