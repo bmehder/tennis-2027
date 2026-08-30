@@ -4,18 +4,23 @@ import Browser
 import Html exposing (Html, a, button, div, h1, img, span, sup, text)
 import Html.Attributes exposing (alt, attribute, class, classList, href, rel, src, target)
 import Html.Events exposing (onClick)
-import TennisMatch exposing (CompletedMatch, CompletedSet(..), Game(..), GameResult(..), Match(..), MatchInProgress, Msg(..), Player(..), PlayerNames, PointScore(..), SetScore, TiebreakScore, initialMatch, gamePointWon, tiebreakServer)
+import TennisMatch exposing (CompletedMatch, CompletedSet(..), Game(..), Match(..), MatchInProgress, Player(..), PlayerNames, PointScore(..), SetScore, initialMatch, otherPlayer, pointWon, tiebreakServer)
 
 
 type alias Model =
     Match
 
 
+type Msg
+    = PointWonBy Player
+    | RestartMatch
+
+
 main : Program () Model Msg
 main =
     Browser.sandbox
         { init =
-            InProgress initialMatch
+            initialMatch
         , update = update
         , view = view
         }
@@ -25,188 +30,10 @@ update : Msg -> Model -> Model
 update msg model =
     case msg of
         PointWonBy player ->
-            case model of
-                InProgress match ->
-                    updateInProgress player match
-
-                Completed _ ->
-                    model
+            pointWon player model
 
         RestartMatch ->
-            InProgress initialMatch
-
-updateInProgress : Player -> MatchInProgress -> Match
-updateInProgress player match =
-    case gamePointWon player match.currentSet.game of
-        GameContinues game ->
-            InProgress (replaceCurrentGame game match)
-
-        RegularGameWon winner ->
-            case match.currentSet.game of
-                RegularGame game ->
-                    finishRegularGame winner game.server match
-
-                Tiebreak _ ->
-                    InProgress match
-
-        TiebreakWon winner score ->
-            case match.currentSet.game of
-                Tiebreak tiebreak ->
-                    finishTiebreak winner score tiebreak.firstServer match
-
-                RegularGame _ ->
-                    InProgress match
-
-
-replaceCurrentGame : Game -> MatchInProgress -> MatchInProgress
-replaceCurrentGame game match =
-    let
-        currentSet =
-            match.currentSet
-    in
-    { match | currentSet = { currentSet | game = game } }
-
-
-finishRegularGame : Player -> Player -> MatchInProgress -> Match
-finishRegularGame winner server match =
-    let
-        currentSet =
-            match.currentSet
-
-        updatedGames =
-            incrementSetScore winner currentSet.games
-
-        nextServer =
-            otherPlayer server
-    in
-    if setIsWonBy winner updatedGames then
-        completeSet winner (RegularSet updatedGames) nextServer match
-
-    else if updatedGames.playerOne == 6 && updatedGames.playerTwo == 6 then
-        InProgress
-            { match
-                | currentSet =
-                    { games = updatedGames
-                    , game =
-                        Tiebreak
-                            { score = { playerOne = 0, playerTwo = 0 }
-                            , firstServer = nextServer
-                            }
-                    }
-            }
-
-    else
-        InProgress
-            { match
-                | currentSet =
-                    { games = updatedGames
-                    , game =
-                        RegularGame
-                            { score = LoveLove
-                            , server = nextServer
-                            }
-                    }
-            }
-
-
-finishTiebreak : Player -> TiebreakScore -> Player -> MatchInProgress -> Match
-finishTiebreak winner tiebreakScore firstServer match =
-    let
-        finalSetScore =
-            incrementSetScore winner match.currentSet.games
-    in
-    completeSet
-        winner
-        (TiebreakSet finalSetScore tiebreakScore)
-        (otherPlayer firstServer)
-        match
-
-
-incrementSetScore : Player -> SetScore -> SetScore
-incrementSetScore player score =
-    case player of
-        PlayerOne ->
-            { score | playerOne = score.playerOne + 1 }
-
-        PlayerTwo ->
-            { score | playerTwo = score.playerTwo + 1 }
-
-
-setIsWonBy : Player -> SetScore -> Bool
-setIsWonBy player score =
-    let
-        ( winnerGames, loserGames ) =
-            case player of
-                PlayerOne ->
-                    ( score.playerOne, score.playerTwo )
-
-                PlayerTwo ->
-                    ( score.playerTwo, score.playerOne )
-    in
-    winnerGames >= 6 && winnerGames - loserGames >= 2
-
-
-completeSet : Player -> CompletedSet -> Player -> MatchInProgress -> Match
-completeSet winner completedSet nextServer match =
-    let
-        completedSets =
-            match.completedSets ++ [ completedSet ]
-
-        setsWon =
-            List.length
-                (List.filter
-                    (\set -> completedSetWinner set == winner)
-                    completedSets
-                )
-    in
-    if setsWon == 2 then
-        Completed
-            { players = match.players
-            , sets = completedSets
-            }
-
-    else
-        InProgress
-            { match
-                | completedSets = completedSets
-                , currentSet =
-                    { games = { playerOne = 0, playerTwo = 0 }
-                    , game =
-                        RegularGame
-                            { score = LoveLove
-                            , server = nextServer
-                            }
-                    }
-            }
-
-
-completedSetWinner : CompletedSet -> Player
-completedSetWinner completedSet =
-    let
-        score =
-            case completedSet of
-                RegularSet setScore ->
-                    setScore
-
-                TiebreakSet setScore _ ->
-                    setScore
-    in
-    if score.playerOne > score.playerTwo then
-        PlayerOne
-
-    else
-        PlayerTwo
-
-
-otherPlayer : Player -> Player
-otherPlayer player =
-    case player of
-        PlayerOne ->
-            PlayerTwo
-
-        PlayerTwo ->
-            PlayerOne
-
+            initialMatch
 
 
 -- VIEW

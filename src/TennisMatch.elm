@@ -2,10 +2,8 @@ module TennisMatch exposing
     ( CompletedMatch
     , CompletedSet(..)
     , Game(..)
-    , GameResult(..)
     , Match(..)
     , MatchInProgress
-    , Msg(..)
     , Player(..)
     , PlayerNames
     , PointScore(..)
@@ -15,7 +13,8 @@ module TennisMatch exposing
     , TiebreakScore
     , TiebreakState
     , initialMatch
-    , gamePointWon
+    , otherPlayer
+    , pointWon
     , tiebreakServer
     )
 
@@ -188,8 +187,8 @@ type Game
 
 type GameResult
     = GameContinues Game
-    | RegularGameWon Player
-    | TiebreakWon Player TiebreakScore
+    | RegularGameWon Player Player
+    | TiebreakWon Player TiebreakScore Player
 
 
 type alias RegularGameState =
@@ -213,7 +212,7 @@ gamePointWon player game =
                     GameContinues (RegularGame { state | score = score })
 
                 RegularGameWonBy winner ->
-                    RegularGameWon winner
+                    RegularGameWon winner state.server
 
         Tiebreak state ->
             let
@@ -221,7 +220,7 @@ gamePointWon player game =
                     incrementTiebreakScore player state.score
             in
             if tiebreakIsWonBy player score then
-                TiebreakWon player score
+                TiebreakWon player score state.firstServer
 
             else
                 GameContinues (Tiebreak { state | score = score })
@@ -326,31 +325,186 @@ type alias CompletedMatch =
     }
 
 
-initialMatch : MatchInProgress
+initialMatch : Match
 initialMatch =
-    { players =
-        { playerOne = "Player One"
-        , playerTwo = "Player Two"
-        }
-    , completedSets = []
-    , currentSet =
-        { games =
-            { playerOne = 0
-            , playerTwo = 0
+    InProgress
+        { players =
+            { playerOne = "Player One"
+            , playerTwo = "Player Two"
             }
-        , game =
-            RegularGame
-                { score = LoveLove
-                , server = PlayerOne
+        , completedSets = []
+        , currentSet =
+            { games =
+                { playerOne = 0
+                , playerTwo = 0
                 }
+            , game =
+                RegularGame
+                    { score = LoveLove
+                    , server = PlayerOne
+                    }
+            }
         }
-    }
 
 
+pointWon : Player -> Match -> Match
+pointWon player matchState =
+    case matchState of
+        InProgress match ->
+            updateInProgress player match
 
--- APPLICATION
+        Completed _ ->
+            matchState
 
 
-type Msg
-    = PointWonBy Player
-    | RestartMatch
+updateInProgress : Player -> MatchInProgress -> Match
+updateInProgress player match =
+    case gamePointWon player match.currentSet.game of
+        GameContinues game ->
+            InProgress (replaceCurrentGame game match)
+
+        RegularGameWon winner server ->
+            finishRegularGame winner server match
+
+        TiebreakWon winner score firstServer ->
+            finishTiebreak winner score firstServer match
+
+
+replaceCurrentGame : Game -> MatchInProgress -> MatchInProgress
+replaceCurrentGame game match =
+    let
+        currentSet =
+            match.currentSet
+    in
+    { match | currentSet = { currentSet | game = game } }
+
+
+finishRegularGame : Player -> Player -> MatchInProgress -> Match
+finishRegularGame winner server match =
+    let
+        currentSet =
+            match.currentSet
+
+        updatedGames =
+            incrementSetScore winner currentSet.games
+
+        nextServer =
+            otherPlayer server
+    in
+    if setIsWonBy winner updatedGames then
+        completeSet winner (RegularSet updatedGames) nextServer match
+
+    else if updatedGames.playerOne == 6 && updatedGames.playerTwo == 6 then
+        InProgress
+            { match
+                | currentSet =
+                    { games = updatedGames
+                    , game =
+                        Tiebreak
+                            { score = { playerOne = 0, playerTwo = 0 }
+                            , firstServer = nextServer
+                            }
+                    }
+            }
+
+    else
+        InProgress
+            { match
+                | currentSet =
+                    { games = updatedGames
+                    , game =
+                        RegularGame
+                            { score = LoveLove
+                            , server = nextServer
+                            }
+                    }
+            }
+
+
+finishTiebreak : Player -> TiebreakScore -> Player -> MatchInProgress -> Match
+finishTiebreak winner tiebreakScore firstServer match =
+    let
+        finalSetScore =
+            incrementSetScore winner match.currentSet.games
+    in
+    completeSet
+        winner
+        (TiebreakSet finalSetScore tiebreakScore)
+        (otherPlayer firstServer)
+        match
+
+
+incrementSetScore : Player -> SetScore -> SetScore
+incrementSetScore player score =
+    case player of
+        PlayerOne ->
+            { score | playerOne = score.playerOne + 1 }
+
+        PlayerTwo ->
+            { score | playerTwo = score.playerTwo + 1 }
+
+
+setIsWonBy : Player -> SetScore -> Bool
+setIsWonBy player score =
+    let
+        ( winnerGames, loserGames ) =
+            case player of
+                PlayerOne ->
+                    ( score.playerOne, score.playerTwo )
+
+                PlayerTwo ->
+                    ( score.playerTwo, score.playerOne )
+    in
+    winnerGames >= 6 && winnerGames - loserGames >= 2
+
+
+completeSet : Player -> CompletedSet -> Player -> MatchInProgress -> Match
+completeSet winner completedSet nextServer match =
+    let
+        completedSets =
+            match.completedSets ++ [ completedSet ]
+
+        setsWon =
+            List.length
+                (List.filter
+                    (\set -> completedSetWinner set == winner)
+                    completedSets
+                )
+    in
+    if setsWon == 2 then
+        Completed
+            { players = match.players
+            , sets = completedSets
+            }
+
+    else
+        InProgress
+            { match
+                | completedSets = completedSets
+                , currentSet =
+                    { games = { playerOne = 0, playerTwo = 0 }
+                    , game =
+                        RegularGame
+                            { score = LoveLove
+                            , server = nextServer
+                            }
+                    }
+            }
+
+
+completedSetWinner : CompletedSet -> Player
+completedSetWinner completedSet =
+    let
+        score =
+            case completedSet of
+                RegularSet setScore ->
+                    setScore
+
+                TiebreakSet setScore _ ->
+                    setScore
+    in
+    if score.playerOne > score.playerTwo then
+        PlayerOne
+
+    else
+        PlayerTwo
