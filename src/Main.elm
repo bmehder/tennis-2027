@@ -1,8 +1,8 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, button, div, h1, span, sup, text)
-import Html.Attributes exposing (class, classList)
+import Html exposing (Html, a, button, div, h1, img, span, sup, text)
+import Html.Attributes exposing (alt, attribute, class, classList, href, rel, src, target)
 import Html.Events exposing (onClick)
 import TennisMatch exposing (CompletedMatch, CompletedSet(..), Game(..), GameResult(..), Match(..), MatchInProgress, Msg(..), Player(..), PlayerNames, PointScore(..), SetScore, TiebreakScore, initialMatch, gamePointWon, tiebreakServer)
 
@@ -34,7 +34,6 @@ update msg model =
 
         RestartMatch ->
             InProgress initialMatch
-
 
 updateInProgress : Player -> MatchInProgress -> Match
 updateInProgress player match =
@@ -230,6 +229,7 @@ viewInProgress match =
         , div [ class "scoreboard" ]
             [ scoreboardHeader
             , playerRow
+                True
                 match.players
                 match.completedSets
                 (Just match.currentSet.games)
@@ -237,12 +237,14 @@ viewInProgress match =
                 (Just (currentServer match.currentSet.game))
                 PlayerOne
             , playerRow
+                True
                 match.players
                 match.completedSets
                 (Just match.currentSet.games)
                 (Just match.currentSet.game)
                 (Just (currentServer match.currentSet.game))
                 PlayerTwo
+            , repositoryFooter
             ]
         , div [ class "point-controls" ]
             [ button
@@ -269,14 +271,35 @@ viewCompleted match =
         [ h1 [] [ text "Elm Tennis 2027" ]
         , div [ class "scoreboard" ]
             [ scoreboardHeader
-            , playerRow match.players match.sets Nothing Nothing Nothing PlayerOne
-            , playerRow match.players match.sets Nothing Nothing Nothing PlayerTwo
+            , playerRow False match.players match.sets Nothing Nothing Nothing PlayerOne
+            , playerRow False match.players match.sets Nothing Nothing Nothing PlayerTwo
+            , repositoryFooter
             ]
         , button
             [ class "restart-button"
             , onClick RestartMatch
             ]
             [ text "Start a new match" ]
+        ]
+
+
+repositoryFooter : Html msg
+repositoryFooter =
+    div [ class "card-footer" ]
+        [ a
+            [ class "github-link"
+            , href "https://github.com/bmehder/tennis-2027"
+            , target "_blank"
+            , rel "noopener noreferrer"
+            ]
+            [ img
+                [ class "github-icon"
+                , src "/github.svg"
+                , alt ""
+                ]
+                []
+            , text "View on GitHub"
+            ]
         ]
 
 
@@ -292,8 +315,8 @@ scoreboardHeader =
         ]
 
 
-playerRow : PlayerNames -> List CompletedSet -> Maybe SetScore -> Maybe Game -> Maybe Player -> Player -> Html msg
-playerRow players completedSets currentSet currentGame currentServer_ player =
+playerRow : Bool -> PlayerNames -> List CompletedSet -> Maybe SetScore -> Maybe Game -> Maybe Player -> Player -> Html msg
+playerRow namesAreEditable players completedSets currentSet currentGame currentServer_ player =
     let
         completedCells =
             List.map (completedSetCell player) completedSets
@@ -318,13 +341,35 @@ playerRow players completedSets currentSet currentGame currentServer_ player =
                 ]
             ]
             []
-         , span [ class "player-name" ] [ text (playerName players player) ]
+         , playerNameView namesAreEditable players player
          ]
             ++ completedCells
             ++ currentCell
             ++ emptyCells
             ++ [ gameScoreCell player currentGame ]
         )
+
+
+playerNameView : Bool -> PlayerNames -> Player -> Html msg
+playerNameView isEditable players player =
+    let
+        editableAttributes =
+            if isEditable then
+                [ attribute "contenteditable" "true"
+                , attribute "spellcheck" "false"
+                ]
+
+            else
+                []
+    in
+    span
+        (classList
+            [ ( "player-name", True )
+            , ( "is-editable", isEditable )
+            ]
+            :: editableAttributes
+        )
+        [ text (playerName players player) ]
 
 
 completedSetCell : Player -> CompletedSet -> Html msg

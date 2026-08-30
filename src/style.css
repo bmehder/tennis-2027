@@ -118,6 +118,17 @@ p {
   white-space: nowrap;
 }
 
+.player-name.is-editable {
+  cursor: text;
+  border-radius: 4px;
+}
+
+.player-name.is-editable:hover,
+.player-name.is-editable:focus {
+  outline: 1px dashed var(--accent-border);
+  outline-offset: 4px;
+}
+
 .serve-dot {
   width: 10px;
   height: 10px;
@@ -150,6 +161,39 @@ p {
   font-size: 1.35rem;
   font-weight: 800;
   text-align: center;
+}
+
+.card-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--code-bg);
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-h);
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.github-link:hover {
+  color: var(--accent);
+}
+
+.github-link:focus-visible {
+  border-radius: 4px;
+  outline: 3px solid var(--accent-border);
+  outline-offset: 3px;
+}
+
+.github-icon {
+  width: 19px;
+  height: 19px;
 }
 
 .empty-score {
