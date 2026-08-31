@@ -28,8 +28,8 @@ viewInProgress events match =
         [ h1 [] [ text "Elm Tennis 2027" ]
         , div [ class "scoreboard" ]
             [ scoreboardHeader
-            , playerRow True match.players match.completedSets (Just match.currentSet.games) (Just match.currentSet.game) (Just (currentServer match.currentSet.game)) PlayerOne
-            , playerRow True match.players match.completedSets (Just match.currentSet.games) (Just match.currentSet.game) (Just (currentServer match.currentSet.game)) PlayerTwo
+            , inProgressPlayerRow match PlayerOne
+            , inProgressPlayerRow match PlayerTwo
             , repositoryFooter
             ]
         , div [ class "point-controls" ]
@@ -56,8 +56,8 @@ viewCompleted events match =
         [ h1 [] [ text "Elm Tennis 2027" ]
         , div [ class "scoreboard" ]
             [ scoreboardHeader
-            , playerRow False match.players match.sets Nothing Nothing Nothing PlayerOne
-            , playerRow False match.players match.sets Nothing Nothing Nothing PlayerTwo
+            , completedPlayerRow match PlayerOne
+            , completedPlayerRow match PlayerTwo
             , repositoryFooter
             ]
         , button
@@ -95,16 +95,53 @@ scoreboardHeader =
         ]
 
 
-playerRow : Bool -> PlayerNames -> List CompletedSet -> Maybe SetScore -> Maybe Game -> Maybe Player -> Player -> Html msg
-playerRow namesAreEditable players completedSets currentSet currentGame currentServer_ player =
+type alias PlayerRow =
+    { namesAreEditable : Bool
+    , players : PlayerNames
+    , completedSets : List CompletedSet
+    , currentSet : Maybe SetScore
+    , currentGame : Maybe Game
+    , currentServer : Maybe Player
+    , player : Player
+    }
+
+
+inProgressPlayerRow : MatchInProgress -> Player -> Html msg
+inProgressPlayerRow match player =
+    playerRow
+        { namesAreEditable = True
+        , players = match.players
+        , completedSets = match.completedSets
+        , currentSet = Just match.currentSet.games
+        , currentGame = Just match.currentSet.game
+        , currentServer = Just (currentServer match.currentSet.game)
+        , player = player
+        }
+
+
+completedPlayerRow : CompletedMatch -> Player -> Html msg
+completedPlayerRow match player =
+    playerRow
+        { namesAreEditable = False
+        , players = match.players
+        , completedSets = match.sets
+        , currentSet = Nothing
+        , currentGame = Nothing
+        , currentServer = Nothing
+        , player = player
+        }
+
+
+playerRow : PlayerRow -> Html msg
+playerRow row =
     let
         completedCells =
-            List.map (completedSetCell player) completedSets
+            List.map (completedSetCell row.player) row.completedSets
 
         currentCell =
-            case currentSet of
+            case row.currentSet of
                 Just score ->
-                    [ scoreCell False (scoreFor player score) [] ]
+                    [ scoreCell False (scoreFor row.player score) [] ]
 
                 Nothing ->
                     []
@@ -117,16 +154,16 @@ playerRow namesAreEditable players completedSets currentSet currentGame currentS
         ([ span
             [ classList
                 [ ( "serve-dot", True )
-                , ( "is-serving", currentServer_ == Just player )
+                , ( "is-serving", row.currentServer == Just row.player )
                 ]
             ]
             []
-         , playerNameView namesAreEditable players player
+         , playerNameView row.namesAreEditable row.players row.player
          ]
             ++ completedCells
             ++ currentCell
             ++ emptyCells
-            ++ [ gameScoreCell player currentGame ]
+            ++ [ gameScoreCell row.player row.currentGame ]
         )
 
 

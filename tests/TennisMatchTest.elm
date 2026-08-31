@@ -1,7 +1,7 @@
 module TennisMatchTest exposing (suite)
 
 import Expect
-import TennisMatch exposing (CompletedSet(..), Game(..), Match(..), Player(..), PointScore(..), initialMatch, pointWon)
+import TennisMatch exposing (CompletedSet(..), Game(..), Match(..), Player(..), PointScore(..), initialMatch, pointWon, tiebreakServer)
 import Test exposing (Test, describe, test)
 
 
@@ -24,6 +24,35 @@ suite =
                                             , server = PlayerTwo
                                             }
                                     }
+                            }
+                        )
+        , test "deuce and advantage require a two-point lead" <|
+            \_ ->
+                initialState
+                    |> winPoints
+                        [ PlayerOne
+                        , PlayerOne
+                        , PlayerOne
+                        , PlayerTwo
+                        , PlayerTwo
+                        , PlayerTwo
+                        , PlayerOne
+                        , PlayerTwo
+                        , PlayerTwo
+                        , PlayerTwo
+                        ]
+                    |> Expect.equal
+                        (InProgress
+                            { players = defaultPlayers
+                            , completedSets = []
+                            , currentSet =
+                                { games = { playerOne = 0, playerTwo = 1 }
+                                , game =
+                                    RegularGame
+                                        { score = LoveLove
+                                        , server = PlayerTwo
+                                        }
+                                }
                             }
                         )
         , test "a set continues into a tiebreak at six games all" <|
@@ -67,6 +96,56 @@ suite =
                                     }
                             }
                         )
+        , test "a tiebreak requires a two-point lead" <|
+            \_ ->
+                initialState
+                    |> winGames (List.repeat 6 [ PlayerOne, PlayerTwo ] |> List.concat)
+                    |> winPoints (List.repeat 6 [ PlayerOne, PlayerTwo ] |> List.concat)
+                    |> winPoints [ PlayerOne, PlayerOne ]
+                    |> Expect.equal
+                        (InProgress
+                            { players = defaultPlayers
+                            , completedSets =
+                                [ TiebreakSet
+                                    { playerOne = 7, playerTwo = 6 }
+                                    { playerOne = 8, playerTwo = 6 }
+                                ]
+                            , currentSet =
+                                { games = { playerOne = 0, playerTwo = 0 }
+                                , game =
+                                    RegularGame
+                                        { score = LoveLove
+                                        , server = PlayerTwo
+                                        }
+                                }
+                            }
+                        )
+        , test "tiebreak service alternates once and then in pairs" <|
+            \_ ->
+                [ { playerOne = 0, playerTwo = 0 }
+                , { playerOne = 1, playerTwo = 0 }
+                , { playerOne = 1, playerTwo = 1 }
+                , { playerOne = 2, playerTwo = 1 }
+                , { playerOne = 2, playerTwo = 2 }
+                , { playerOne = 3, playerTwo = 2 }
+                , { playerOne = 3, playerTwo = 3 }
+                ]
+                    |> List.map
+                        (\score ->
+                            tiebreakServer
+                                { score = score
+                                , firstServer = PlayerOne
+                                }
+                        )
+                    |> Expect.equal
+                        [ PlayerOne
+                        , PlayerTwo
+                        , PlayerTwo
+                        , PlayerOne
+                        , PlayerOne
+                        , PlayerTwo
+                        , PlayerTwo
+                        ]
         , test "winning two sets completes the match" <|
             \_ ->
                 initialState
