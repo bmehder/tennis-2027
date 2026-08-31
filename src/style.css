@@ -165,13 +165,15 @@ p {
 
 .card-footer {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
   padding: 12px 20px;
   border-top: 1px solid var(--border);
   background: var(--code-bg);
 }
 
-.github-link {
+.footer-link {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -181,11 +183,11 @@ p {
   text-decoration: none;
 }
 
-.github-link:hover {
+.footer-link:hover {
   color: var(--accent);
 }
 
-.github-link:focus-visible {
+.footer-link:focus-visible {
   border-radius: 4px;
   outline: 3px solid var(--accent-border);
   outline-offset: 3px;

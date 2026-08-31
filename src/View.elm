@@ -72,7 +72,14 @@ repositoryFooter : Html msg
 repositoryFooter =
     div [ class "card-footer" ]
         [ a
-            [ class "github-link"
+            [ class "footer-link"
+            , href "https://github.com/bmehder/tennis-2027/blob/main/elm-vs-typescript.md"
+            , target "_blank"
+            , rel "noopener noreferrer"
+            ]
+            [ text "Read the design article" ]
+        , a
+            [ class "footer-link"
             , href "https://github.com/bmehder/tennis-2027"
             , target "_blank"
             , rel "noopener noreferrer"
