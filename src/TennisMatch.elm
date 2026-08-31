@@ -187,8 +187,21 @@ type Game
 
 type GameResult
     = GameContinues Game
-    | RegularGameWon Player Player
-    | TiebreakWon Player TiebreakScore Player
+    | RegularGameWon RegularGameWin
+    | TiebreakWon TiebreakWin
+
+
+type alias RegularGameWin =
+    { winner : Player
+    , server : Player
+    }
+
+
+type alias TiebreakWin =
+    { winner : Player
+    , score : TiebreakScore
+    , firstServer : Player
+    }
 
 
 type alias RegularGameState =
@@ -212,7 +225,10 @@ gamePointWon player game =
                     GameContinues (RegularGame { state | score = score })
 
                 RegularGameWonBy winner ->
-                    RegularGameWon winner state.server
+                    RegularGameWon
+                        { winner = winner
+                        , server = state.server
+                        }
 
         Tiebreak state ->
             let
@@ -220,7 +236,11 @@ gamePointWon player game =
                     incrementTiebreakScore player state.score
             in
             if tiebreakIsWonBy player score then
-                TiebreakWon player score state.firstServer
+                TiebreakWon
+                    { winner = player
+                    , score = score
+                    , firstServer = state.firstServer
+                    }
 
             else
                 GameContinues (Tiebreak { state | score = score })
@@ -256,6 +276,8 @@ tiebreakServer state =
         pointsPlayed =
             state.score.playerOne + state.score.playerTwo
 
+        -- The first server serves once. Service then alternates in pairs:
+        -- other, other, first, first, other, other, and so on.
         serviceTurn =
             (pointsPlayed + 1) // 2
     in
@@ -363,11 +385,11 @@ updateInProgress player match =
         GameContinues game ->
             InProgress (replaceCurrentGame game match)
 
-        RegularGameWon winner server ->
-            finishRegularGame winner server match
+        RegularGameWon result ->
+            finishRegularGame result.winner result.server match
 
-        TiebreakWon winner score firstServer ->
-            finishTiebreak winner score firstServer match
+        TiebreakWon result ->
+            finishTiebreak result.winner result.score result.firstServer match
 
 
 replaceCurrentGame : Game -> MatchInProgress -> MatchInProgress
