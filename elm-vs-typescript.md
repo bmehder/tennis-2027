@@ -65,7 +65,7 @@ regularGamePointWon player score =
 
 This is verbose. It is also explicit, total, and mechanically checked. If another `PointScore` variant is added, Elm reports every pattern match that has not accounted for it. A nonsensical score cannot appear unless someone deliberately adds that concept to the model.
 
-The representation spends code to purchase guarantees.
+The representation spends code to purchase guarantees, not to please a parser.
 
 ## TypeScript can model the same idea
 
@@ -196,10 +196,14 @@ const [match, dispatch] = useReducer(matchReducer, initialMatch);
 </button>
 ```
 
-Svelte can call the pure transition and assign its result:
+Svelte 5 can keep the match in reactive state and assign the result of the pure transition:
 
 ```svelte
-<button on:click={() => match = pointWon("playerOne", match)}>
+<script lang="ts">
+  let match = $state(initialMatch);
+</script>
+
+<button onclick={() => match = pointWon("playerOne", match)}>
   Point for Player One
 </button>
 ```
@@ -236,7 +240,7 @@ JSX resembles HTML more closely:
 Svelte is closer still:
 
 ```svelte
-<button class="point-button" on:click={() => pointWon(player)}>
+<button class="point-button" onclick={() => pointWon(player)}>
   <span class="button-label">Point for</span>
   {name}
 </button>
@@ -244,9 +248,9 @@ Svelte is closer still:
 
 For developers fluent in HTML, JSX and Svelte templates are usually faster to write and easier to scan. Browser examples can be pasted and adapted with less translation. Tooling for accessibility, component libraries, CSS systems, and visual testing is broader.
 
-Elm’s HTML is ordinary function application. Attributes and child nodes are typed values, composition is function composition, and there is no separate template language. But consistency is not the same as readability. Deep markup accumulates brackets, commas, and indentation. The original seven-argument `playerRow` made the structure harder to understand.
+Elm’s HTML is ordinary function application. Attributes and child nodes are typed values, composition is function composition, and there is no separate template language. But consistency is not the same as readability. Deep markup accumulates brackets, commas, and indentation. A renderer such as `playerRow` can also accumulate many positional inputs, making its call sites difficult to interpret.
 
-This project improved that call site with state-specific adapters:
+The view addresses that problem with state-specific adapters:
 
 ```elm
 inProgressPlayerRow match PlayerOne
@@ -300,7 +304,7 @@ A TypeScript version with the same model could use essentially the same tests. A
 
 This application uses `Browser.sandbox`, so it has no commands or subscriptions. In a larger Elm application, effects are represented as data returned from `update`, and the runtime performs them. That preserves a pure core but introduces an explicit layer for HTTP, time, randomness, browser events, and JavaScript interop.
 
-React and Svelte integrate effects more directly into component lifecycles. That is convenient, especially when using browser libraries. It also creates more opportunities for behavior to depend on render timing, stale closures, dependency arrays, or reactive statement ordering.
+React and Svelte integrate effects more directly into component lifecycles. That is convenient, especially when using browser libraries. It also creates more opportunities for behavior to depend on render timing, stale closures, dependency arrays, effect scheduling, or code distributed among runes and component callbacks.
 
 Elm trades directness for control. React and Svelte trade some control for flexibility and ecosystem access.
 
@@ -342,6 +346,34 @@ The domain layer might not be shorter if it preserved the same guarantees. Discr
 
 That may still be a rational trade. Not every project needs the strongest representation. The important comparison is not line count alone but what each line promises.
 
+## Adding features changes the comparison
+
+The current rules are intentionally fixed: best of three sets, a tiebreak at 6–6, and ordinary advantage scoring. Real feature work would put the model under more pressure.
+
+Suppose the application later supports best-of-five matches, no-ad games, ten-point match tiebreaks, or tournaments whose final sets use different rules. The current constants and transitions would no longer be enough. The domain would need an explicit rules value:
+
+```elm
+type alias MatchRules =
+    { setsToWin : Int
+    , regularGame : RegularGameRule
+    , finalSet : FinalSetRule
+    }
+```
+
+Functions such as `pointWon`, `setIsWonBy`, and `tiebreakIsWonBy` would then receive the appropriate rule instead of embedding one format. Elm’s compiler would help locate every place affected by the new distinctions. That guidance is valuable, but the change could touch many signatures. A strongly modeled design makes new concepts explicit; it does not make them free.
+
+TypeScript discriminated unions can provide similar compiler guidance. The practical difference appears if the original implementation used scattered numbers and conditions. Changing a central `MatchRules` value is manageable; finding every component that independently assumes “first to seven” is much harder. Future flexibility depends at least as much on where rules live as on which framework renders the scoreboard.
+
+Other features stress different boundaries:
+
+- Undo and point history favor representing events explicitly, perhaps replaying a list of `PointWonBy Player` values rather than saving mutable snapshots.
+- Persistence requires encoding and decoding the model. Elm forces that boundary to be explicit; TypeScript normally needs a runtime schema in addition to its static types.
+- Live scoring introduces commands, subscriptions, reconnection state, and possibly conflicting updates. Elm keeps those effects outside the pure transition, while React and Svelte offer more library choices for synchronizing remote state.
+- Editable player names should move out of unmanaged `contenteditable` behavior and into modeled state once names must survive rerenders or persistence.
+- Rich animation may be easier to integrate through the React or Svelte ecosystem, while Elm may require more custom work or JavaScript interop.
+
+The model should therefore evolve in response to concrete features, not attempt to predict every future tournament format. The useful foundation is the separation already present: tennis rules are pure domain transitions, application messages describe intent, and the view only renders state. That separation leaves room to add capabilities without making the initial MVP carry all of their complexity.
+
 ## When each approach fits
 
 Elm is especially compelling when intricate client state dominates, invalid combinations are a major risk, JavaScript integrations are modest, refactoring confidence matters, and the team values a constrained architecture. Scoring systems, workflow editors, form engines, rules-driven configurators, and educational tools can fit that profile.
@@ -356,6 +388,6 @@ Elm turns functional, type-driven state modeling into the default terrain. The c
 
 React and Svelte with TypeScript offer friendlier templates, broader tooling, and more freedom. A careful implementation can retain nearly all of the domain strengths shown here. The price is that correctness depends more on conventions, compiler configuration, boundary validation, and continued team discipline.
 
-For an imaginary academic audience, the lesson is not “Elm good, TypeScript bad.” It is that language and framework design change the cost of maintaining an idea. Elm makes it expensive to step outside the modeled state machine. React and Svelte make it easy to choose how much of that machine to model in the first place.
+The lesson is not “Elm good, TypeScript bad.” It is that language and framework design change the cost of maintaining an idea. Elm makes it expensive to step outside the modeled state machine. React and Svelte make it easy to choose how much of that machine to model in the first place.
 
 That difference is the experiment.
