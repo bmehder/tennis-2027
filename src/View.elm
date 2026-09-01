@@ -6,6 +6,10 @@ import Html.Events exposing (onClick)
 import TennisMatch exposing (CompletedMatch, CompletedSet(..), Game(..), Match(..), MatchInProgress, Player(..), PlayerNames, PointScore(..), SetScore, otherPlayer, tiebreakServer)
 
 
+
+-- MATCH VIEW
+
+
 type alias Events msg =
     { pointWon : Player -> msg
     , restartMatch : msg
@@ -39,17 +43,6 @@ viewInProgress events match =
         ]
 
 
-pointButton : Events msg -> Player -> String -> Html msg
-pointButton events player name =
-    button
-        [ class "point-button"
-        , onClick (events.pointWon player)
-        ]
-        [ span [ class "button-label" ] [ text "Point for" ]
-        , text name
-        ]
-
-
 viewCompleted : Events msg -> CompletedMatch -> Html msg
 viewCompleted events match =
     div [ class "app-shell" ]
@@ -68,26 +61,34 @@ viewCompleted events match =
         ]
 
 
-repositoryFooter : Html msg
-repositoryFooter =
-    div [ class "card-footer" ]
-        [ a
-            [ class "footer-link"
-            , href "https://github.com/bmehder/tennis-2027/blob/main/elm-vs-typescript.md"
-            , target "_blank"
-            , rel "noopener noreferrer"
-            ]
-            [ text "Read the design article" ]
-        , a
-            [ class "footer-link"
-            , href "https://github.com/bmehder/tennis-2027"
-            , target "_blank"
-            , rel "noopener noreferrer"
-            ]
-            [ img [ class "github-icon", src "/github.svg", alt "" ] []
-            , text "View on GitHub"
-            ]
+
+-- CONTROLS
+
+
+pointButton : Events msg -> Player -> String -> Html msg
+pointButton events player name =
+    button
+        [ class "point-button"
+        , onClick (events.pointWon player)
         ]
+        [ span [ class "button-label" ] [ text "Point for" ]
+        , text name
+        ]
+
+
+
+-- SCOREBOARD
+
+
+type alias PlayerRow =
+    { namesAreEditable : Bool
+    , players : PlayerNames
+    , completedSets : List CompletedSet
+    , currentSet : Maybe SetScore
+    , currentGame : Maybe Game
+    , currentServer : Maybe Player
+    , player : Player
+    }
 
 
 scoreboardHeader : Html msg
@@ -100,17 +101,6 @@ scoreboardHeader =
         , span [] [ text "3" ]
         , span [] [ text "Pts" ]
         ]
-
-
-type alias PlayerRow =
-    { namesAreEditable : Bool
-    , players : PlayerNames
-    , completedSets : List CompletedSet
-    , currentSet : Maybe SetScore
-    , currentGame : Maybe Game
-    , currentServer : Maybe Player
-    , player : Player
-    }
 
 
 inProgressPlayerRow : MatchInProgress -> Player -> Html msg
@@ -196,6 +186,30 @@ playerNameView isEditable players player =
         [ text (playerName players player) ]
 
 
+currentServer : Game -> Player
+currentServer game =
+    case game of
+        RegularGame state ->
+            state.server
+
+        Tiebreak state ->
+            tiebreakServer state
+
+
+playerName : PlayerNames -> Player -> String
+playerName players player =
+    case player of
+        PlayerOne ->
+            players.playerOne
+
+        PlayerTwo ->
+            players.playerTwo
+
+
+
+-- SCORE CELLS
+
+
 completedSetCell : Player -> CompletedSet -> Html msg
 completedSetCell player completedSet =
     case completedSet of
@@ -233,16 +247,6 @@ scoreCell isSetWinner score detail =
         (text (String.fromInt score) :: detail)
 
 
-scoreFor : Player -> { score | playerOne : Int, playerTwo : Int } -> Int
-scoreFor player score =
-    case player of
-        PlayerOne ->
-            score.playerOne
-
-        PlayerTwo ->
-            score.playerTwo
-
-
 gameScoreCell : Player -> Maybe Game -> Html msg
 gameScoreCell player game =
     let
@@ -258,6 +262,20 @@ gameScoreCell player game =
                     "–"
     in
     span [ class "game-score" ] [ text score ]
+
+
+
+-- SCORE FORMATTING
+
+
+scoreFor : Player -> { score | playerOne : Int, playerTwo : Int } -> Int
+scoreFor player score =
+    case player of
+        PlayerOne ->
+            score.playerOne
+
+        PlayerTwo ->
+            score.playerTwo
 
 
 regularGameScoreFor : Player -> PointScore -> String
@@ -332,21 +350,27 @@ regularGameScores score =
             ( "40", "Ad" )
 
 
-currentServer : Game -> Player
-currentServer game =
-    case game of
-        RegularGame state ->
-            state.server
 
-        Tiebreak state ->
-            tiebreakServer state
+-- FOOTER
 
 
-playerName : PlayerNames -> Player -> String
-playerName players player =
-    case player of
-        PlayerOne ->
-            players.playerOne
-
-        PlayerTwo ->
-            players.playerTwo
+repositoryFooter : Html msg
+repositoryFooter =
+    div [ class "card-footer" ]
+        [ a
+            [ class "footer-link"
+            , href "https://github.com/bmehder/tennis-2027/blob/main/elm-vs-typescript.md"
+            , target "_blank"
+            , rel "noopener noreferrer"
+            ]
+            [ text "Read the design article" ]
+        , a
+            [ class "footer-link"
+            , href "https://github.com/bmehder/tennis-2027"
+            , target "_blank"
+            , rel "noopener noreferrer"
+            ]
+            [ img [ class "github-icon", src "/github.svg", alt "" ] []
+            , text "View on GitHub"
+            ]
+        ]

@@ -27,8 +27,8 @@ main =
 update : Msg -> Model -> Model
 update msg model =
     case msg of
-        PointWonBy player ->
-            pointWon player model
+        PointWonBy pointWinner ->
+            pointWon pointWinner model
 
         RestartMatch ->
             initialMatch
