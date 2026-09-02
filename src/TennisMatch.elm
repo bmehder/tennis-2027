@@ -15,6 +15,8 @@ module TennisMatch exposing
     , initialMatch
     , otherPlayer
     , pointWon
+    , resume
+    , suspend
     , tiebreakServer
     )
 
@@ -155,7 +157,7 @@ gamePointWon pointWinner game =
                 score =
                     incrementTiebreakScore pointWinner state.score
             in
-            if tiebreakIsWonBy pointWinner score then
+            if isTiebreakWonBy pointWinner score then
                 TiebreakWon
                     { winner = pointWinner
                     , score = score
@@ -288,8 +290,8 @@ incrementTiebreakScore pointWinner score =
             { score | playerTwo = score.playerTwo + 1 }
 
 
-tiebreakIsWonBy : Player -> TiebreakScore -> Bool
-tiebreakIsWonBy pointWinner score =
+isTiebreakWonBy : Player -> TiebreakScore -> Bool
+isTiebreakWonBy pointWinner score =
     let
         ( winnerPoints, loserPoints ) =
             case pointWinner of
@@ -359,8 +361,8 @@ incrementSetScore gameWinner score =
             { score | playerTwo = score.playerTwo + 1 }
 
 
-setIsWonBy : Player -> SetScore -> Bool
-setIsWonBy gameWinner score =
+isSetWonBy : Player -> SetScore -> Bool
+isSetWonBy gameWinner score =
     let
         ( winnerGames, loserGames ) =
             case gameWinner of
@@ -405,6 +407,7 @@ completedSetWinner completedSet =
 
 type Match
     = InProgress MatchInProgress
+    | Suspended MatchInProgress
     | Completed CompletedMatch
 
 
@@ -438,6 +441,35 @@ pointWon pointWinner matchState =
     case matchState of
         InProgress match ->
             updateInProgress pointWinner match
+
+        Suspended _ ->
+            matchState
+
+        Completed _ ->
+            matchState
+
+
+suspend : Match -> Match
+suspend matchState =
+    case matchState of
+        InProgress match ->
+            Suspended match
+
+        Suspended _ ->
+            matchState
+
+        Completed _ ->
+            matchState
+
+
+resume : Match -> Match
+resume matchState =
+    case matchState of
+        Suspended match ->
+            InProgress match
+
+        InProgress _ ->
+            matchState
 
         Completed _ ->
             matchState
@@ -474,7 +506,7 @@ finishRegularGame result match =
         nextServer =
             otherPlayer result.server
     in
-    if setIsWonBy result.winner updatedGames then
+    if isSetWonBy result.winner updatedGames then
         completeSet result.winner (RegularSet updatedGames) nextServer match
 
     else
@@ -509,7 +541,7 @@ completeSet winner completedSet nextServer match =
                     match.completedSets ++ [ completedSet ]
             }
     in
-    if matchIsWonBy winner updatedMatch then
+    if isMatchWonBy winner updatedMatch then
         Completed
             { players = updatedMatch.players
             , sets = updatedMatch.completedSets
@@ -522,8 +554,8 @@ completeSet winner completedSet nextServer match =
             }
 
 
-matchIsWonBy : Player -> MatchInProgress -> Bool
-matchIsWonBy player match =
+isMatchWonBy : Player -> MatchInProgress -> Bool
+isMatchWonBy player match =
     match.completedSets
         |> List.filter (completedSetWinner >> (==) player)
         |> List.length

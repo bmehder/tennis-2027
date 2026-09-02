@@ -1,7 +1,7 @@
 module TennisMatchTest exposing (suite)
 
 import Expect
-import TennisMatch exposing (CompletedSet(..), Game(..), Match(..), Player(..), PointScore(..), initialMatch, pointWon, tiebreakServer)
+import TennisMatch exposing (CompletedSet(..), Game(..), Match(..), Player(..), PointScore(..), initialMatch, pointWon, resume, suspend, tiebreakServer)
 import Test exposing (Test, describe, test)
 
 
@@ -159,6 +159,35 @@ suite =
                                 ]
                             }
                         )
+        , test "suspending retains the match state" <|
+            \_ ->
+                let
+                    activeMatch =
+                        initialState
+                            |> winPoints [ PlayerOne, PlayerTwo, PlayerOne ]
+                in
+                case activeMatch of
+                    InProgress match ->
+                        suspend activeMatch
+                            |> Expect.equal (Suspended match)
+
+                    Suspended _ ->
+                        Expect.fail "A newly started match should not be suspended"
+
+                    Completed _ ->
+                        Expect.fail "Three points should not complete a match"
+        , test "a suspended match ignores points and resumes unchanged" <|
+            \_ ->
+                let
+                    activeMatch =
+                        initialState
+                            |> winPoints [ PlayerOne, PlayerTwo, PlayerOne ]
+                in
+                activeMatch
+                    |> suspend
+                    |> pointWon PlayerTwo
+                    |> resume
+                    |> Expect.equal activeMatch
         ]
 
 

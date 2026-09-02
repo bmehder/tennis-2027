@@ -217,8 +217,34 @@ p {
   margin-top: 16px;
 }
 
+.suspension-controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.suspension-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--code-bg);
+}
+
+.suspension-label {
+  color: var(--text-h);
+  font-weight: 650;
+}
+
 .point-button,
-.restart-button {
+.restart-button,
+.suspension-button,
+.resume-button {
   border: 1px solid var(--accent-border);
   border-radius: 12px;
   color: var(--text-h);
@@ -248,20 +274,31 @@ p {
   padding: 12px 20px;
 }
 
+.suspension-button,
+.resume-button {
+  padding: 10px 14px;
+}
+
 .point-button:hover,
-.restart-button:hover {
+.restart-button:hover,
+.suspension-button:hover,
+.resume-button:hover {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent-bg), var(--accent) 8%);
   transform: translateY(-1px);
 }
 
 .point-button:active,
-.restart-button:active {
+.restart-button:active,
+.suspension-button:active,
+.resume-button:active {
   transform: translateY(0);
 }
 
 .point-button:focus-visible,
-.restart-button:focus-visible {
+.restart-button:focus-visible,
+.suspension-button:focus-visible,
+.resume-button:focus-visible {
   outline: 3px solid var(--accent-border);
   outline-offset: 3px;
 }
@@ -293,6 +330,12 @@ p {
 
   .point-controls {
     grid-template-columns: 1fr;
+  }
+
+  .suspension-controls,
+  .suspension-status {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .app-shell {
